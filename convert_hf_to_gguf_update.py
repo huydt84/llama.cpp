@@ -22,7 +22,8 @@
 #
 # TODO: generate tokenizer tests for llama.cpp
 #
-
+import subprocess
+import importlib.util
 import logging
 import os
 import pathlib
@@ -117,17 +118,47 @@ models = [
     {"name": "glm4",             "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/THUDM/glm-4-9b-hf", },
     {"name": "pixtral",          "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/mistral-community/pixtral-12b", },
     {"name": "seed-coder",       "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/ByteDance-Seed/Seed-Coder-8B-Base", },
+    {"name": "ruri-large",       "tokt": TOKENIZER_TYPE.WPM, "repo": "https://huggingface.co/cl-nagoya/ruri-large", },
 ]
+
+
+def install_if_missing(package_spec: str, module_name: str = None):
+    """
+    Installs the package via pip if the module cannot be imported.
+    
+    Args:
+        package_spec (str): The pip install spec, e.g., 'fugashi[unidic-lite]'.
+        module_name (str): The module name to check via import. If None, uses the base name from package_spec.
+    """
+    if module_name is None:
+        module_name = package_spec.split("[")[0]
+
+    if importlib.util.find_spec(module_name) is None:
+        print(f"Module '{module_name}' not found. Installing '{package_spec}'...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", package_spec])
+    else:
+        print(f"Module '{module_name}' is already installed.")
 
 
 def download_file_with_auth(url, token, save_path):
     headers = {"Authorization": f"Bearer {token}"}
-    response = sess.get(url, headers=headers)
-    response.raise_for_status()
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    with open(save_path, 'wb') as downloaded_file:
-        downloaded_file.write(response.content)
-    logger.info(f"File {save_path} downloaded successfully")
+    try:
+        response = sess.get(url, headers=headers)
+        response.raise_for_status()
+        
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        with open(save_path, 'wb') as downloaded_file:
+            downloaded_file.write(response.content)
+        logger.info(f"File {save_path} downloaded successfully")
+    except requests.HTTPError as e:
+        if e.response.status_code == 404:
+            logger.warning(f"URL not found: {url}")
+        else:
+            logger.error(f"HTTP error occurred when downloading {url}: {e}")
+    except requests.ConnectionError:
+        logger.error(f"Connection error occurred when downloading {url}")
+    except Exception as e:
+        logger.error(f"Unexpected error occurred when downloading {url}: {e}")
 
 
 def download_model(model):
@@ -137,7 +168,7 @@ def download_model(model):
 
     os.makedirs(f"models/tokenizers/{name}", exist_ok=True)
 
-    files = ["config.json", "tokenizer.json", "tokenizer_config.json"]
+    files = ["config.json", "tokenizer.json", "tokenizer_config.json", "vocab.txt"]
 
     if name == "gpt-4o":
         # Xenova/gpt-4o is tokenizer-only, it does not contain config.json
@@ -194,6 +225,13 @@ for model in models:
         logger.warning(f"Directory for tokenizer {name} not found. Skipping...")
         continue
 
+    if os.path.isfile(f"models/tokenizers/{name}/tokenizer_config.json"):
+        with open(f"models/tokenizers/{name}/tokenizer_config.json", "r", encoding="utf-8") as f:
+            cfg = json.load(f)
+            if "word_tokenizer_type" in cfg and cfg["word_tokenizer_type"] == "mecab":
+                # Mecab need to be installed via fugashi
+                install_if_missing("fugashi[unidic-lite]")
+
     # create the tokenizer
     try:
         if name == "t5":
@@ -213,15 +251,16 @@ for model in models:
     logger.info(f"chktok: {chktok}")
     logger.info(f"chkhsh: {chkhsh}")
 
-    # print the "pre_tokenizer" content from the tokenizer.json
-    with open(f"models/tokenizers/{name}/tokenizer.json", "r", encoding="utf-8") as f:
-        cfg = json.load(f)
-        normalizer = cfg["normalizer"]
-        logger.info("normalizer: " + json.dumps(normalizer, indent=4))
-        pre_tokenizer = cfg["pre_tokenizer"]
-        logger.info("pre_tokenizer: " + json.dumps(pre_tokenizer, indent=4))
-        if "ignore_merges" in cfg["model"]:
-            logger.info("ignore_merges: " + json.dumps(cfg["model"]["ignore_merges"], indent=4))
+    # print the "pre_tokenizer" content from the tokenizer.json, if exists
+    if os.path.isfile(f"models/tokenizers/{name}/tokenizer.json"):
+        with open(f"models/tokenizers/{name}/tokenizer.json", "r", encoding="utf-8") as f:
+            cfg = json.load(f)
+            normalizer = cfg["normalizer"]
+            logger.info("normalizer: " + json.dumps(normalizer, indent=4))
+            pre_tokenizer = cfg["pre_tokenizer"]
+            logger.info("pre_tokenizer: " + json.dumps(pre_tokenizer, indent=4))
+            if "ignore_merges" in cfg["model"]:
+                logger.info("ignore_merges: " + json.dumps(cfg["model"]["ignore_merges"], indent=4))
 
     logger.info("")
 
