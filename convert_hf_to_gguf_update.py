@@ -122,22 +122,22 @@ models = [
 ]
 
 
-def install_if_missing(package_spec: str, module_name: str = None):
+def fugashi_check():
     """
-    Installs the package via pip if the module cannot be imported.
-    
-    Args:
-        package_spec (str): The pip install spec, e.g., 'fugashi[unidic-lite]'.
-        module_name (str): The module name to check via import. If None, uses the base name from package_spec.
+    Check if fugashi and Japanese dictionary are installed and can be imported.
     """
-    if module_name is None:
-        module_name = package_spec.split("[")[0]
-
-    if importlib.util.find_spec(module_name) is None:
-        print(f"Module '{module_name}' not found. Installing '{package_spec}'...")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", package_spec])
-    else:
-        print(f"Module '{module_name}' is already installed.")
+    try:
+        import fugashi
+        tagger = fugashi.Tagger()
+    except ImportError:
+        raise ImportError(
+            "fugashi is missing, install it via: pip install 'fugashi[unidic-lite]'"
+        )
+    except Exception:
+        raise RuntimeError(
+            "fugashi is installed, but it might be missing the dictionary (e.g., unidic-lite).\n"
+            "Try installing via: pip install 'fugashi[unidic-lite]'\n"
+        )
 
 
 def download_file_with_auth(url, token, save_path):
@@ -230,7 +230,7 @@ for model in models:
             cfg = json.load(f)
             if "word_tokenizer_type" in cfg and cfg["word_tokenizer_type"] == "mecab":
                 # Mecab need to be installed via fugashi
-                install_if_missing("fugashi[unidic-lite]")
+                fugashi_check()
 
     # create the tokenizer
     try:
