@@ -3676,7 +3676,7 @@ class InternLM3Model(TextModel):
         return [(self.map_tensor_name(name), data_torch)]
 
 
-@ModelBase.register("BertModel", "BertForMaskedLM", "CamembertModel")
+@ModelBase.register("BertModel", "BertForMaskedLM", "CamembertModel", "BertForSequenceClassification")
 class BertModel(TextModel):
     model_arch = gguf.MODEL_ARCH.BERT
 
@@ -3738,6 +3738,13 @@ class BertModel(TextModel):
 
         if name.startswith("cls.seq_relationship"):
             return []
+        
+        # For BertForSequenceClassification (direct projection layer)
+        if name == "classifier.weight":
+            name = "classifier.out_proj.weight"
+
+        if name == "classifier.bias":
+            name = "classifier.out_proj.bias"
 
         return [(self.map_tensor_name(name), data_torch)]
 
