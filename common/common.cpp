@@ -904,8 +904,14 @@ struct common_init_result common_init_from_params(common_params & params) {
         }
 
         if (llama_vocab_eos(vocab) == LLAMA_TOKEN_NULL) {
-            LOG_WRN("%s: warning: vocab does not have an EOS token, reranking will not work\n", __func__);
-            ok = false;
+            // Now we use SEP as a fallback, so only warn if both are missing
+            if (llama_vocab_sep(vocab) == LLAMA_TOKEN_NULL) {
+                LOG_WRN("%s: warning: vocab does not have an EOS token or SEP token, reranking will not work\n",
+                        __func__);
+                ok = false;
+            } else {
+                LOG_WRN("%s: warning: vocab does not have an EOS token, using SEP token as fallback\n", __func__);
+            }
         }
 
         if (llama_vocab_sep(vocab) == LLAMA_TOKEN_NULL) {
