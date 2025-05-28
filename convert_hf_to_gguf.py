@@ -3738,7 +3738,7 @@ class BertModel(TextModel):
 
         if name.startswith("cls.seq_relationship"):
             return []
-        
+
         # For BertForSequenceClassification (direct projection layer)
         if name == "classifier.weight":
             name = "classifier.out_proj.weight"

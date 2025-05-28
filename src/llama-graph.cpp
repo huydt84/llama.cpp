@@ -1567,7 +1567,7 @@ void llm_graph_context::build_pooling(
                     // https://github.com/huggingface/transformers/blob/5af7d41e49bbfc8319f462eb45253dcb3863dfb7/src/transformers/models/roberta/modeling_roberta.py#L1566
                     cur = ggml_add(ctx0, ggml_mul_mat(ctx0, cls, inp), cls_b);
                     cur = ggml_tanh(ctx0, cur);
-                    
+
                     // some models don't have `cls_out`, for example: https://huggingface.co/jinaai/jina-reranker-v1-tiny-en
                     // https://huggingface.co/jinaai/jina-reranker-v1-tiny-en/blob/cb5347e43979c3084a890e3f99491952603ae1b7/modeling_bert.py#L884-L896
                     if (cls_out) {
