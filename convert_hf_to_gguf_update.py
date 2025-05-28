@@ -22,8 +22,6 @@
 #
 # TODO: generate tokenizer tests for llama.cpp
 #
-import subprocess
-import importlib.util
 import logging
 import os
 import pathlib
@@ -142,23 +140,12 @@ def fugashi_check():
 
 def download_file_with_auth(url, token, save_path):
     headers = {"Authorization": f"Bearer {token}"}
-    try:
-        response = sess.get(url, headers=headers)
-        response.raise_for_status()
-        
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        with open(save_path, 'wb') as downloaded_file:
-            downloaded_file.write(response.content)
-        logger.info(f"File {save_path} downloaded successfully")
-    except requests.HTTPError as e:
-        if e.response.status_code == 404:
-            logger.warning(f"URL not found: {url}")
-        else:
-            logger.error(f"HTTP error occurred when downloading {url}: {e}")
-    except requests.ConnectionError:
-        logger.error(f"Connection error occurred when downloading {url}")
-    except Exception as e:
-        logger.error(f"Unexpected error occurred when downloading {url}: {e}")
+    response = sess.get(url, headers=headers)
+    response.raise_for_status()
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    with open(save_path, 'wb') as downloaded_file:
+        downloaded_file.write(response.content)
+    logger.info(f"File {save_path} downloaded successfully")
 
 
 def download_model(model):
