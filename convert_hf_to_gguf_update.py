@@ -225,12 +225,14 @@ for model in models:
         logger.warning(f"Directory for tokenizer {name} not found. Skipping...")
         continue
 
+    pre_tokenizer_log = True
     if os.path.isfile(f"models/tokenizers/{name}/tokenizer_config.json"):
         with open(f"models/tokenizers/{name}/tokenizer_config.json", "r", encoding="utf-8") as f:
             cfg = json.load(f)
             if "word_tokenizer_type" in cfg and cfg["word_tokenizer_type"] == "mecab":
                 # Mecab need to be installed via fugashi
                 fugashi_check()
+                pre_tokenizer_log = False
 
     # create the tokenizer
     try:
@@ -251,8 +253,8 @@ for model in models:
     logger.info(f"chktok: {chktok}")
     logger.info(f"chkhsh: {chkhsh}")
 
-    # print the "pre_tokenizer" content from the tokenizer.json, if exists
-    if os.path.isfile(f"models/tokenizers/{name}/tokenizer.json"):
+    # print the "pre_tokenizer" content from the tokenizer.json
+    if pre_tokenizer_log:
         with open(f"models/tokenizers/{name}/tokenizer.json", "r", encoding="utf-8") as f:
             cfg = json.load(f)
             normalizer = cfg["normalizer"]
