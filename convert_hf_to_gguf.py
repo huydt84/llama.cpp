@@ -3909,7 +3909,7 @@ class BertModel(TextModel):
 
 @ModelBase.register("DistilBertModel", "DistilBertForMaskedLM", "DistilBertForSequenceClassification")
 class DistilBertModel(BertModel):
-    model_arch = gguf.MODEL_ARCH.DISTIL_BERT
+    model_arch = gguf.MODEL_ARCH.BERT
 
     def set_gguf_parameters(self):
         self.gguf_writer.add_layer_norm_eps(1e-12)
