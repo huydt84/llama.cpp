@@ -3920,6 +3920,7 @@ class DistilBertModel(BertModel):
         if name.startswith("distilbert."):
             name = name[11:]
 
+        # These layers act as MLM head, so we don't need them
         if name.startswith("vocab_"):
             return []
 

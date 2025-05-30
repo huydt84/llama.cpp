@@ -2116,9 +2116,7 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
             case LLM_ARCH_NOMIC_BERT_MOE:
                 {
                     tok_embd     = create_tensor(tn(LLM_TENSOR_TOKEN_EMBD,  "weight"), {n_embd, n_vocab}, 0);
-                    if (arch != LLM_ARCH_DISTIL_BERT) {
-                        type_embd    = create_tensor(tn(LLM_TENSOR_TOKEN_TYPES, "weight"), {n_embd, n_token_types}, 0);
-                    }
+                    type_embd    = create_tensor(tn(LLM_TENSOR_TOKEN_TYPES, "weight"), {n_embd, n_token_types}, TENSOR_NOT_REQUIRED);
 
                     if (arch == LLM_ARCH_BERT || arch == LLM_ARCH_DISTIL_BERT) {
                         pos_embd = create_tensor(tn(LLM_TENSOR_POS_EMBD,    "weight"), {n_embd, n_ctx_train}, 0);
