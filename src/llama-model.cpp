@@ -679,6 +679,7 @@ void llama_model::load_hparams(llama_model_loader & ml) {
                 hparams.f_max_alibi_bias = 8.0f;
             } break;
         case LLM_ARCH_BERT:
+        case LLM_ARCH_DISTIL_BERT:
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS,    hparams.f_norm_eps);
                 ml.get_key(LLM_KV_ATTENTION_CAUSAL,           hparams.causal_attn);
@@ -2110,13 +2111,16 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
                     }
                 } break;
             case LLM_ARCH_BERT:
+            case LLM_ARCH_DISTIL_BERT:
             case LLM_ARCH_NOMIC_BERT:
             case LLM_ARCH_NOMIC_BERT_MOE:
                 {
                     tok_embd     = create_tensor(tn(LLM_TENSOR_TOKEN_EMBD,  "weight"), {n_embd, n_vocab}, 0);
-                    type_embd    = create_tensor(tn(LLM_TENSOR_TOKEN_TYPES, "weight"), {n_embd, n_token_types}, 0);
+                    if (arch != LLM_ARCH_DISTIL_BERT) {
+                        type_embd    = create_tensor(tn(LLM_TENSOR_TOKEN_TYPES, "weight"), {n_embd, n_token_types}, 0);
+                    }
 
-                    if (arch == LLM_ARCH_BERT) {
+                    if (arch == LLM_ARCH_BERT || arch == LLM_ARCH_DISTIL_BERT) {
                         pos_embd = create_tensor(tn(LLM_TENSOR_POS_EMBD,    "weight"), {n_embd, n_ctx_train}, 0);
 
                         cls   = create_tensor(tn(LLM_TENSOR_CLS, "weight"), {n_embd, n_embd}, TENSOR_NOT_REQUIRED);
@@ -2132,7 +2136,7 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
                     for (int i = 0; i < n_layer; ++i) {
                         auto & layer = layers[i];
 
-                        if (arch == LLM_ARCH_BERT) {
+                        if (arch == LLM_ARCH_BERT || arch == LLM_ARCH_DISTIL_BERT) {
                             layer.wq = create_tensor(tn(LLM_TENSOR_ATTN_Q,   "weight", i), {n_embd, n_embd}, 0);
                             layer.bq = create_tensor(tn(LLM_TENSOR_ATTN_Q,   "bias", i),   {n_embd}, 0);
 
@@ -2163,7 +2167,7 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
                             layer.ffn_up   = create_tensor(tn(LLM_TENSOR_FFN_UP,        "weight", i), {n_embd, n_ff}, 0);
                             layer.ffn_down = create_tensor(tn(LLM_TENSOR_FFN_DOWN,      "weight", i), {n_ff, n_embd}, 0);
 
-                            if (arch == LLM_ARCH_BERT || arch == LLM_ARCH_NOMIC_BERT_MOE) {
+                            if (arch == LLM_ARCH_BERT || arch == LLM_ARCH_DISTIL_BERT || arch == LLM_ARCH_NOMIC_BERT_MOE) {
                                 layer.bo         = create_tensor(tn(LLM_TENSOR_ATTN_OUT, "bias", i), {n_embd}, 0);
                                 layer.ffn_up_b   = create_tensor(tn(LLM_TENSOR_FFN_UP,   "bias", i), {n_ff}, 0);
                                 layer.ffn_down_b = create_tensor(tn(LLM_TENSOR_FFN_DOWN, "bias", i), {n_embd}, 0);
@@ -5888,9 +5892,11 @@ struct llm_build_bert : public llm_graph_context {
         inpL = build_inp_embd(model.tok_embd);
 
         // token types are hardcoded to zero ("Sentence A")
-        ggml_tensor * type_row0 = ggml_view_1d(ctx0, model.type_embd, n_embd, 0);
-        inpL = ggml_add(ctx0, inpL, type_row0);
-        if (model.arch == LLM_ARCH_BERT) {
+        if (model.type_embd) {
+            ggml_tensor * type_row0 = ggml_view_1d(ctx0, model.type_embd, n_embd, 0);
+            inpL = ggml_add(ctx0, inpL, type_row0);
+        }
+        if (model.arch == LLM_ARCH_BERT || model.arch == LLM_ARCH_DISTIL_BERT) {
             inpL = ggml_add(ctx0, ggml_get_rows(ctx0, model.pos_embd, inp_pos), inpL);
         }
         cb(inpL, "inp_embd", -1);
@@ -5910,7 +5916,7 @@ struct llm_build_bert : public llm_graph_context {
             ggml_tensor * Vcur;
 
             // self-attention
-            if (model.arch == LLM_ARCH_BERT || model.arch == LLM_ARCH_JINA_BERT_V2) {
+            if (model.arch == LLM_ARCH_BERT || model.arch == LLM_ARCH_DISTIL_BERT || model.arch == LLM_ARCH_JINA_BERT_V2) {
                 Qcur = ggml_add(ctx0, build_lora_mm(model.layers[il].wq, cur), model.layers[il].bq);
 
                 if (model.layers[il].attn_q_norm) {
@@ -6011,7 +6017,7 @@ struct llm_build_bert : public llm_graph_context {
                         0.0f,
                         LLAMA_EXPERT_GATING_FUNC_TYPE_SOFTMAX, il);
                 cb(cur, "ffn_moe_out", il);
-            } else if (model.arch == LLM_ARCH_BERT || model.arch == LLM_ARCH_NOMIC_BERT_MOE) {
+            } else if (model.arch == LLM_ARCH_BERT || model.arch == LLM_ARCH_DISTIL_BERT || model.arch == LLM_ARCH_NOMIC_BERT_MOE) {
                 cur = build_ffn(cur,
                         model.layers[il].ffn_up,   model.layers[il].ffn_up_b,   NULL,
                         NULL,                      NULL,                        NULL,
@@ -13194,6 +13200,7 @@ llama_memory_i * llama_model::create_memory(const llama_memory_params & params, 
 
     switch (arch) {
         case LLM_ARCH_BERT:
+        case LLM_ARCH_DISTIL_BERT:
         case LLM_ARCH_JINA_BERT_V2:
         case LLM_ARCH_NOMIC_BERT:
         case LLM_ARCH_NOMIC_BERT_MOE:
@@ -13300,6 +13307,7 @@ llm_graph_result_ptr llama_model::build_graph(
                 llm = std::make_unique<llm_build_refact>(*this, params, gf);
             } break;
         case LLM_ARCH_BERT:
+        case LLM_ARCH_DISTIL_BERT:
         case LLM_ARCH_JINA_BERT_V2:
         case LLM_ARCH_NOMIC_BERT:
         case LLM_ARCH_NOMIC_BERT_MOE:
@@ -13667,6 +13675,7 @@ llama_rope_type llama_model_rope_type(const llama_model * model) {
         case LLM_ARCH_GROK:
         case LLM_ARCH_DBRX:
         case LLM_ARCH_BERT:
+        case LLM_ARCH_DISTIL_BERT:
         case LLM_ARCH_NOMIC_BERT:
         case LLM_ARCH_NOMIC_BERT_MOE:
         case LLM_ARCH_STABLELM:
