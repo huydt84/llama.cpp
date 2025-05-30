@@ -468,6 +468,7 @@ static const std::map<llm_arch, std::map<llm_tensor, const char *>> LLM_TENSOR_N
         {
             { LLM_TENSOR_TOKEN_EMBD,      "token_embd" },
             { LLM_TENSOR_TOKEN_EMBD_NORM, "token_embd_norm" },
+            { LLM_TENSOR_TOKEN_TYPES,     "token_types" }, // not used
             { LLM_TENSOR_POS_EMBD,        "position_embd" },
             { LLM_TENSOR_ATTN_OUT_NORM,   "blk.%d.attn_output_norm" },
             { LLM_TENSOR_ATTN_Q,          "blk.%d.attn_q" },
