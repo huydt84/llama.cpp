@@ -887,7 +887,12 @@ int llama_context::decode(llama_batch & inp_batch) {
     const int32_t n_vocab = vocab.n_tokens();
 
     const int64_t n_tokens_all = batch.n_tokens;
-    const int64_t n_embd       = hparams.n_embd;
+    int64_t n_embd       = hparams.n_embd;
+
+    if (model.arch == LLM_ARCH_QWEN3 || model.arch == LLM_ARCH_QWEN3MOE) {
+        // Qwen3 uses a different embedding size
+        n_embd = n_vocab;
+    }
 
     llama_kv_cache_guard kv_guard(kv_self);
 
@@ -1021,7 +1026,15 @@ int llama_context::decode(llama_batch & inp_batch) {
 
             if (n_outputs) {
                 GGML_ASSERT( n_outputs_prev + n_outputs <= n_outputs_all);
-                GGML_ASSERT((n_outputs_prev + n_outputs)*n_vocab <= (int64_t) logits_size);
+                
+                if (model.arch == LLM_ARCH_QWEN3 && cparams.embeddings) {
+                    // For Qwen3 with embeddings enabled, we share the tensor between logits and embeddings
+                    GGML_ASSERT(n_outputs * n_vocab <= (int64_t) logits_size);
+                } else {
+                    // Standard check for other model architectures
+                    GGML_ASSERT((n_outputs_prev + n_outputs) * n_vocab <= (int64_t) logits_size);
+                }
+                
                 ggml_backend_tensor_get_async(backend_res, t_logits, logits_out, 0, n_outputs*n_vocab*sizeof(float));
             }
         }
@@ -1170,7 +1183,12 @@ int32_t llama_context::output_reserve(int32_t n_outputs) {
 
     const auto n_batch = cparams.n_batch;
     const auto n_vocab = vocab.n_tokens();
-    const auto n_embd  = hparams.n_embd;
+    int64_t n_embd  = hparams.n_embd;
+
+    // For Qwen3, n_embd is equal to n_vocab
+    if (model.arch == LLM_ARCH_QWEN3) {
+        n_embd = n_vocab;
+    }
 
     // TODO: use a per-batch flag for logits presence instead
     bool has_logits = !cparams.embeddings;
@@ -1182,8 +1200,19 @@ int32_t llama_context::output_reserve(int32_t n_outputs) {
         has_embd   = true;
     }
 
-    logits_size = has_logits ? n_vocab*n_outputs_max : 0;
-    embd_size   = has_embd   ?  n_embd*n_outputs_max : 0;
+    // For Qwen3 models, both logits and embeddings point to the same tensor
+    bool shared_tensor = (model.arch == LLM_ARCH_QWEN3);
+
+    // Adjust buffer sizes for the case where both tensors are shared
+    if (shared_tensor && has_logits && has_embd) {
+        // For Qwen3, we only need one buffer since logits and embeddings share the same tensor
+        logits_size = n_vocab * n_outputs_max;
+        embd_size = 0; // No need for a separate embedding buffer
+    } else {
+        // Normal case - separate buffers
+        logits_size = has_logits ? n_vocab * n_outputs_max : 0;
+        embd_size = has_embd ? n_embd * n_outputs_max : 0;
+    }
 
     if (output_ids.empty()) {
         // init, never resized afterwards

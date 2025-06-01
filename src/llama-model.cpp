@@ -7074,13 +7074,13 @@ struct llm_build_qwen3 : public llm_graph_context {
                 LLM_NORM_RMS, -1);
 
         cb(cur, "result_norm", -1);
-        res->t_embd = cur;
 
         // lm_head
         cur = build_lora_mm(model.output, cur);
 
         cb(cur, "result_output", -1);
         res->t_logits = cur;
+        res->t_embd = cur;
 
         ggml_build_forward_expand(gf, cur);
     }
@@ -7202,13 +7202,13 @@ struct llm_build_qwen3moe : public llm_graph_context {
                 LLM_NORM_RMS, -1);
 
         cb(cur, "result_norm", -1);
-        res->t_embd = cur;
 
         // lm_head
         cur = build_lora_mm(model.output, cur);
 
         cb(cur, "result_output", -1);
         res->t_logits = cur;
+        res->t_embd = cur;
 
         ggml_build_forward_expand(gf, cur);
     }

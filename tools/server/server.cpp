@@ -2545,7 +2545,18 @@ struct server_context {
         res->n_tokens  = slot.n_prompt_tokens;
         res->oaicompat = slot.params.oaicompat;
 
-        const int n_embd = llama_model_n_embd(model);
+        int n_embd = llama_model_n_embd(model);
+        // For Qwen3 specific handling
+        bool is_qwen3 = false;
+        char arch_name[128] = {0};
+        if (llama_model_meta_val_str(model, "general.architecture", arch_name, sizeof(arch_name)) > 0) {
+            is_qwen3 = (strcmp(arch_name, "qwen3") == 0 || strcmp(arch_name, "qwen3moe") == 0);
+            if (is_qwen3) {
+                // Get vocabulary size for Qwen3 models - they use n_vocab as embedding size
+                n_embd = llama_vocab_n_tokens(vocab);
+                SLT_INF(slot, "Qwen3 model embedding size: %d\n", n_embd);
+            }
+        }
 
         std::vector<float> embd_res(n_embd, 0.0f);
 
@@ -2556,6 +2567,7 @@ struct server_context {
 
             const float * embd = llama_get_embeddings_seq(ctx, batch.seq_id[i][0]);
             if (embd == NULL) {
+                fprintf(stderr, "Failed to get embeddings\n");
                 embd = llama_get_embeddings_ith(ctx, i);
             }
 
