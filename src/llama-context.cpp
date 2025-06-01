@@ -1072,7 +1072,7 @@ int llama_context::decode(llama_batch & inp_batch) {
 
             if (n_outputs) {
                 GGML_ASSERT( n_outputs_prev + n_outputs <= n_outputs_all);
-                
+
                 if (model.arch == LLM_ARCH_QWEN3 && cparams.embeddings) {
                     // For Qwen3 with embeddings enabled, we share the tensor between logits and embeddings
                     GGML_ASSERT(n_outputs * n_vocab <= (int64_t) logits_size);
@@ -1080,7 +1080,7 @@ int llama_context::decode(llama_batch & inp_batch) {
                     // Standard check for other model architectures
                     GGML_ASSERT((n_outputs_prev + n_outputs) * n_vocab <= (int64_t) logits_size);
                 }
-                
+
                 ggml_backend_tensor_get_async(backend_res, t_logits, logits_out, 0, n_outputs*n_vocab*sizeof(float));
             }
         }
