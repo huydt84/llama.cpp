@@ -809,6 +809,9 @@ class TextModel(ModelBase):
         if chkhsh == "1431a23e583c97432bc230bff598d103ddb5a1f89960c8f1d1051aaa944d0b35":
             # ref: https://huggingface.co/sapienzanlp/Minerva-7B-base-v1.0
             res = "minerva-7b"
+        if chkhsh == "9286a8bdaef9f09da63eae001d8dca3e8b4dcfebfe468807c0c87a831a4a1901":
+            # ref: https://huggingface.co/cl-nagoya/ruri-large
+            res = "ruri-large"
 
         if res is None:
             logger.warning("\n")
