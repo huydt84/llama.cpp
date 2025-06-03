@@ -146,8 +146,8 @@ def fugashi_check():
     Check if fugashi and Japanese dictionary are installed and can be imported.
     """
     try:
-        import fugashi
-        tagger = fugashi.Tagger()
+        import fugashi # pyright: ignore[reportMissingImports]
+        fugashi.Tagger()
     except ImportError:
         raise ImportError(
             "fugashi is missing, install it via: pip install 'fugashi[unidic-lite]'"
