@@ -166,7 +166,7 @@ struct llama_hparams {
     // The remainder parameter specifies which position in the pattern is dense
     // example: n_pattern = 3, remainder = 2
     //   il == 0: swa     (0 % 3 = 0, which is not equal to 2)
-    //   il == 1: swa     (1 % 3 = 1, which is not equal to 2) 
+    //   il == 1: swa     (1 % 3 = 1, which is not equal to 2)
     //   il == 2: dense   (2 % 3 = 2, which equals 2)
     //   il == 3: swa     (3 % 3 = 0, which is not equal to 2)
     //   il == 4: swa     (4 % 3 = 1, which is not equal to 2)
