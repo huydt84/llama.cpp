@@ -714,7 +714,7 @@ void llama_model::load_hparams(llama_model_loader & ml) {
                 hparams.n_swa = 128;
 
                 hparams.swa_type = LLAMA_SWA_TYPE_STANDARD;
-                hparams.set_swa_pattern(3);
+                hparams.set_swa_pattern(3, 0);
 
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS,    hparams.f_norm_eps);
                 ml.get_key(LLM_KV_ATTENTION_CAUSAL,           hparams.causal_attn);
