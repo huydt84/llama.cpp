@@ -363,6 +363,111 @@ void llm_graph_input_attn_no_cache::set_input(const llama_ubatch * ubatch) {
     }
 }
 
+void llm_graph_input_attn_no_cache_iswa::set_input(const llama_ubatch * ubatch) {
+    // Standard attention mask
+    if (kq_mask) {
+        if (cparams.causal_attn) {
+            const int64_t n_kv         = ubatch->n_tokens;
+            const int64_t n_tokens     = ubatch->n_tokens;
+            const int64_t n_seq_tokens = ubatch->n_seq_tokens;
+            const int64_t n_seqs       = ubatch->n_seqs;
+
+            GGML_ASSERT(ggml_backend_buffer_is_host(kq_mask->buffer));
+            float * data = (float *) kq_mask->data;
+
+            for (int h = 0; h < 1; ++h) {
+                for (int s1 = 0; s1 < n_seqs; ++s1) {
+                    const llama_seq_id seq_id = ubatch->seq_id[s1][0];
+
+                    for (int j = 0; j < n_seq_tokens; ++j) {
+                        const int32_t tj = s1*n_seq_tokens + j;
+
+                        for (int s0 = 0; s0 < n_seqs; ++s0) {
+                            for (int i = 0; i < n_seq_tokens; ++i) {
+                                const int32_t ti = s0 * n_seq_tokens + i;
+                                float         f  = -INFINITY;
+
+                                for (int s = 0; s < ubatch->n_seq_id[s0]; ++s) {
+                                    if (ubatch->seq_id[s0][s] == seq_id && ubatch->pos[ti] <= ubatch->pos[tj]) {
+                                        if (hparams.use_alibi) {
+                                            f = -std::abs(ubatch->pos[ti] - ubatch->pos[tj]);
+                                        } else {
+                                            f = 0.0f;
+                                        }
+                                        break;
+                                    }
+                                }
+
+                                data[h * (n_kv * n_tokens) + tj * n_kv + ti] = f;
+                            }
+                        }
+                    }
+                }
+
+                for (int i = n_tokens; i < GGML_PAD(n_tokens, GGML_KQ_MASK_PAD); ++i) {
+                    for (int j = 0; j < n_kv; ++j) {
+                        data[h*(n_kv*n_tokens) + i*n_kv + j] = -INFINITY;
+                    }
+                }
+            }
+        }
+    }
+
+    // SWA attention mask
+    if (kq_mask_swa) {
+        if (cparams.causal_attn) {
+            const int64_t n_kv         = ubatch->n_tokens;
+            const int64_t n_tokens     = ubatch->n_tokens;
+            const int64_t n_seq_tokens = ubatch->n_seq_tokens;
+            const int64_t n_seqs       = ubatch->n_seqs;
+            const int64_t window_size  = hparams.n_swa;
+
+            GGML_ASSERT(ggml_backend_buffer_is_host(kq_mask_swa->buffer));
+            float * data = (float *) kq_mask_swa->data;
+
+            for (int h = 0; h < 1; ++h) {
+                for (int s1 = 0; s1 < n_seqs; ++s1) {
+                    const llama_seq_id seq_id = ubatch->seq_id[s1][0];
+
+                    for (int j = 0; j < n_seq_tokens; ++j) {
+                        const int32_t tj = s1*n_seq_tokens + j;
+
+                        for (int s0 = 0; s0 < n_seqs; ++s0) {
+                            for (int i = 0; i < n_seq_tokens; ++i) {
+                                const int32_t ti = s0 * n_seq_tokens + i;
+                                float         f  = -INFINITY;
+
+                                for (int s = 0; s < ubatch->n_seq_id[s0]; ++s) {
+                                    if (ubatch->seq_id[s0][s] == seq_id && ubatch->pos[ti] <= ubatch->pos[tj]) {
+                                        const bool in_window = (ubatch->pos[tj] - ubatch->pos[ti]) <= window_size;
+                                        
+                                        if (in_window) {
+                                            if (hparams.use_alibi) {
+                                                f = -std::abs(ubatch->pos[ti] - ubatch->pos[tj]);
+                                            } else {
+                                                f = 0.0f;
+                                            }
+                                        }
+                                        break;
+                                    }
+                                }
+
+                                data[h * (n_kv * n_tokens) + tj * n_kv + ti] = f;
+                            }
+                        }
+                    }
+                }
+
+                for (int i = n_tokens; i < GGML_PAD(n_tokens, GGML_KQ_MASK_PAD); ++i) {
+                    for (int j = 0; j < n_kv; ++j) {
+                        data[h*(n_kv*n_tokens) + i*n_kv + j] = -INFINITY;
+                    }
+                }
+            }
+        }
+    }
+}
+
 void llm_graph_input_attn_kv_unified::set_input(const llama_ubatch * ubatch) {
     if (self_kq_mask) {
         kv_state->set_input_kq_mask(self_kq_mask, ubatch, cparams.causal_attn);
@@ -1523,7 +1628,8 @@ void llm_graph_context::build_pooling(
         ggml_tensor * cls,
         ggml_tensor * cls_b,
         ggml_tensor * cls_out,
-        ggml_tensor * cls_out_b) const {
+        ggml_tensor * cls_out_b,
+        ggml_tensor * cls_norm) const {
     if (!cparams.embeddings) {
         return;
     }
@@ -1570,6 +1676,11 @@ void llm_graph_context::build_pooling(
                     // https://github.com/huggingface/transformers/blob/5af7d41e49bbfc8319f462eb45253dcb3863dfb7/src/transformers/models/roberta/modeling_roberta.py#L1566
                     cur = ggml_add(ctx0, ggml_mul_mat(ctx0, cls, inp), cls_b);
                     cur = ggml_tanh(ctx0, cur);
+
+                    if (cls_norm) {
+                        // normalization head
+                        cur = build_norm(cur, cls_norm, nullptr, LLM_NORM, 0);
+                    }
 
                     // some models don't have `cls_out`, for example: https://huggingface.co/jinaai/jina-reranker-v1-tiny-en
                     // https://huggingface.co/jinaai/jina-reranker-v1-tiny-en/blob/cb5347e43979c3084a890e3f99491952603ae1b7/modeling_bert.py#L884-L896
