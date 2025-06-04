@@ -3935,6 +3935,7 @@ class DistilBertModel(BertModel):
 
         return super().modify_tensors(data_torch, name, bid)
 
+
 @ModelBase.register("ModernBert", "ModernBertForMaskedLM", "ModernBertForSequenceClassification")
 class ModernBertModel(BertModel):
     model_arch = gguf.MODEL_ARCH.MODERN_BERT
@@ -3957,6 +3958,7 @@ class ModernBertModel(BertModel):
             name = name[6:]
 
         return super().modify_tensors(data_torch, name, bid)
+
 
 @ModelBase.register("RobertaModel", "RobertaForSequenceClassification")
 class RobertaModel(BertModel):

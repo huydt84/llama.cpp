@@ -243,28 +243,6 @@ public:
     const llama_cparams & cparams;
 };
 
-class llm_graph_input_attn_no_cache_iswa : public llm_graph_input_i {
-public:
-    llm_graph_input_attn_no_cache_iswa(const llama_hparams & hparams, const llama_cparams & cparams) :
-        hparams(hparams),
-        cparams(cparams) {
-    }
-    ~llm_graph_input_attn_no_cache_iswa() = default;
-
-    void set_input(const llama_ubatch * ubatch) override;
-
-    ggml_tensor * get_kq_mask()     const { return kq_mask_cnv; }
-    ggml_tensor * get_kq_mask_swa() const { return kq_mask_swa_cnv; }
-
-    ggml_tensor * kq_mask         = nullptr; // F32 [n_tokens, n_batch]
-    ggml_tensor * kq_mask_cnv     = nullptr; //     [n_tokens, n_batch]
-    ggml_tensor * kq_mask_swa     = nullptr; // F32 [n_tokens, n_batch]
-    ggml_tensor * kq_mask_swa_cnv = nullptr; //     [n_tokens, n_batch]
-
-    const llama_hparams & hparams;
-    const llama_cparams & cparams;
-};
-
 class llm_graph_input_attn_kv_unified : public llm_graph_input_i {
 public:
     llm_graph_input_attn_kv_unified(
@@ -565,23 +543,8 @@ struct llm_graph_context {
 
     llm_graph_input_attn_no_cache * build_attn_inp_no_cache() const;
 
-    llm_graph_input_attn_no_cache_iswa * build_attn_inp_no_cache_iswa() const;
-
     ggml_tensor * build_attn(
             llm_graph_input_attn_no_cache * inp,
-            ggml_cgraph * gf,
-            ggml_tensor * wo,
-            ggml_tensor * wo_b,
-            ggml_tensor * q_cur, // [n_embd_head_q, n_head_q, n_tokens]
-            ggml_tensor * k_cur, // [n_embd_head_k, n_head_k, n_tokens]
-            ggml_tensor * v_cur, // [n_embd_head_v, n_head_v, n_tokens]
-            ggml_tensor * kq_b,
-            ggml_tensor * v_mla, // [n_embd_head_v_mla, n_embd_head_v, n_head_v]
-                  float   kq_scale,
-                    int   il) const;
-
-    ggml_tensor * build_attn(
-            llm_graph_input_attn_no_cache_iswa * inp,
             ggml_cgraph * gf,
             ggml_tensor * wo,
             ggml_tensor * wo_b,
