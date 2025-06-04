@@ -6127,7 +6127,7 @@ struct llm_build_modern_bert : public llm_graph_context {
         cb(inpL, "inp_embd", -1);
 
         // embed layer norm
-        inpL = build_norm(inpL, model.tok_norm, model.tok_norm_b, LLM_NORM, -1);
+        inpL = build_norm(inpL, model.tok_norm, nullptr, LLM_NORM, -1);
         cb(inpL, "inp_norm", -1);
 
         auto * inp_attn = build_attn_inp_kv_unified_iswa();
@@ -6180,7 +6180,7 @@ struct llm_build_modern_bert : public llm_graph_context {
             cb(Vcur, "Vcur", il);
 
             cur = build_attn(inp_attn, gf,
-                    model.layers[il].wo, model.layers[il].bo,
+                    model.layers[il].wo, nullptr,
                     Qcur, Kcur, Vcur, nullptr, nullptr, 1.0f/sqrtf(float(n_embd_head)), il);
             cb(cur, "kqv_out", il);
 
