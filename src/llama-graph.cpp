@@ -1243,8 +1243,9 @@ llm_graph_input_attn_no_cache * llm_graph_context::build_attn_inp_no_cache() con
 }
 
 llm_graph_input_attn_no_cache * llm_graph_context::build_attn_inp_no_cache_iswa() const {
-    // Default sliding window size - can be made configurable via cparams
-    const int n_swa = 128;
+    // Use the sliding window size from hyperparameters
+    // If hparams.n_swa is 0, use a default value (128)
+    const int n_swa = hparams.n_swa > 0 ? hparams.n_swa : 128;
 
     auto inp = std::make_unique<llm_graph_input_attn_no_cache>(hparams, cparams, n_swa);
 
