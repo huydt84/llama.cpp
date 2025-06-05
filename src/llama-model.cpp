@@ -6130,7 +6130,7 @@ struct llm_build_modern_bert : public llm_graph_context {
         inpL = build_norm(inpL, model.tok_norm, nullptr, LLM_NORM, -1);
         cb(inpL, "inp_norm", -1);
 
-        auto * inp_attn = build_attn_inp_kv_unified_iswa();
+        auto * inp_attn = build_attn_inp_no_cache_iswa();
 
         // iterate layers
         for (int il = 0; il < n_layer; ++il) {
