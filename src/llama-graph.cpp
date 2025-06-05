@@ -1245,7 +1245,7 @@ llm_graph_input_attn_no_cache * llm_graph_context::build_attn_inp_no_cache() con
 llm_graph_input_attn_no_cache * llm_graph_context::build_attn_inp_no_cache_iswa() const {
     // Default sliding window size - can be made configurable via cparams
     const int n_swa = 128;
-    
+
     auto inp = std::make_unique<llm_graph_input_attn_no_cache>(hparams, cparams, n_swa);
 
     // note: there is no KV cache, so the number of KV values is equal to the number of tokens in the batch
