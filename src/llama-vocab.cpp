@@ -2103,6 +2103,12 @@ void llama_vocab::impl::load(llama_model_loader & ml, const LLM_KV & kv) {
             } else {
                 _set_token_attr("<mask>", LLAMA_TOKEN_ATTR_LSTRIP, true);
             }
+        } else if (_contains_any(general_arch, {"modern-bert"})) {
+            if (token_to_id.count("[MASK]") == 0) {
+                LLAMA_LOG_WARN("%s: Mask token is missing in vocab, please reconvert model!\n", __func__);
+            } else {
+                _set_token_attr("[MASK]", LLAMA_TOKEN_ATTR_LSTRIP, true);
+            }
         } else if (_contains_any(model_name, {"phi-3", "phi3"})) {
             for (auto id : cache_special_tokens) {
                 _set_tokenid_attr(id, LLAMA_TOKEN_ATTR_RSTRIP, true);
