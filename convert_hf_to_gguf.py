@@ -3946,7 +3946,6 @@ class ModernBertModel(BertModel):
 
     def set_gguf_parameters(self):
         super().set_gguf_parameters()
-        self._try_set_pooling_type()
         self.gguf_writer.add_sliding_window(self.hparams["local_attention"])
         self.gguf_writer.add_rope_freq_base(self.hparams["global_rope_theta"])
         self.gguf_writer.add_rope_freq_base_swa(self.hparams["local_rope_theta"])
