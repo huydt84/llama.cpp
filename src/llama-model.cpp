@@ -718,7 +718,7 @@ void llama_model::load_hparams(llama_model_loader & ml) {
                 hparams.rope_freq_base_train_swa = 10000.0f;
                 hparams.n_swa = 128;
 
-                hparams.swa_type = LLAMA_SWA_TYPE_STANDARD;
+                hparams.swa_type = LLAMA_SWA_TYPE_SYMMETRIC;
                 hparams.set_swa_pattern(3, 0);
 
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS,    hparams.f_norm_eps);
@@ -6144,7 +6144,7 @@ struct llm_build_modern_bert : public llm_graph_context {
         inpL = build_norm(inpL, model.tok_norm, nullptr, LLM_NORM, -1);
         cb(inpL, "inp_norm", -1);
 
-        auto * inp_attn = build_attn_inp_no_cache_iswa();
+        auto * inp_attn = build_attn_inp_no_cache();
 
         // iterate layers
         for (int il = 0; il < n_layer; ++il) {
