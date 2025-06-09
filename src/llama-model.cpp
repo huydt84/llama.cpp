@@ -6214,30 +6214,12 @@ struct llm_build_modern_bert : public llm_graph_context {
             ggml_tensor * ffn_inp = cur;
             cb(ffn_inp, "ffn_inp", il);
 
-            // feed-forward network
-            ggml_tensor * ffn_up = build_lora_mm(model.layers[il].ffn_up, cur);
-            cb(ffn_up, "ffn_up", il);
-
-            int64_t split_point = ffn_up->ne[0] / 2;
-            ggml_tensor * output_ffn_up = ggml_cont(ctx0, ggml_view_2d(
-                                            ctx0, ffn_up, split_point,
-                                            ffn_up->ne[1], ffn_up->nb[1], 0
-                                        ));
-            ggml_tensor * output_ffn_gate = ggml_cont(ctx0, ggml_view_2d(
-                                            ctx0, ffn_up, split_point,
-                                            ffn_up->ne[1], ffn_up->nb[1],
-                                            split_point * ggml_element_size(ffn_up)
-                                        ));
-
-            // Apply activation function
-            output_ffn_up = ggml_gelu(ctx0, output_ffn_up);
-
-            // Element-wise multiplication
-            ggml_tensor * gated = ggml_mul(ctx0, output_ffn_up, output_ffn_gate);
-            cb(gated, "ffn_gated", il);
-
-            // Final projection
-            cur = build_lora_mm(model.layers[il].ffn_down, gated);
+            cur = build_ffn(cur,
+                    model.layers[il].ffn_up,
+                    NULL, NULL, NULL, NULL, NULL,
+                    model.layers[il].ffn_down,
+                    NULL, NULL, NULL,
+                    LLM_FFN_GEGLU, LLM_FFN_SEQ, il);
 
             // attentions bypass the intermediate layer
             cur = ggml_add(ctx0, cur, ffn_inp);
