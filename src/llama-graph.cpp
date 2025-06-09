@@ -347,7 +347,7 @@ void llm_graph_input_attn_no_cache::set_input(const llama_ubatch * ubatch) {
                                         const int64_t pos_diff = pos_j - pos_i;
 
                                         if (hparams.use_alibi &&
-                                                (pos_diff >= -half_n_swa && pos_diff <= half_n_swa)) {
+                                                (hparams.n_swa == 0 || (pos_diff >= -half_n_swa && pos_diff <= half_n_swa))) {
                                             f = -std::abs(ubatch->pos[ti] - ubatch->pos[tj]);
                                         } else {
                                             f = 0.0f;
