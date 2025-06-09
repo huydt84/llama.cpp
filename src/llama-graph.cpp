@@ -1602,9 +1602,7 @@ void llm_graph_context::build_pooling(
                         cur = ggml_add(ctx0, cur, cls_out_b);
                     }
                 } else {
-                    // Some models may not have either classification heads
-                    // In this case, just use the CLS/pooled embedding directly
-                    cur = inp;
+                    GGML_ABORT("RANK pooling requires either cls+cls_b or cls_out+cls_out_b");
                 }
             } break;
         default:
