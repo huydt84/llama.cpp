@@ -714,13 +714,10 @@ void llama_model::load_hparams(llama_model_loader & ml) {
             } break;
         case LLM_ARCH_MODERN_BERT:
             {
-                hparams.rope_freq_base_train = 160000.0f;
-                hparams.rope_freq_base_train_swa = 10000.0f;
-                hparams.n_swa = 128;
-
                 hparams.swa_type = LLAMA_SWA_TYPE_SYMMETRIC;
                 hparams.set_swa_pattern(3, 0);
 
+                ml.get_key(LLM_KV_ATTENTION_SLIDING_WINDOW,   hparams.n_swa);
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS,    hparams.f_norm_eps);
                 ml.get_key(LLM_KV_ATTENTION_CAUSAL,           hparams.causal_attn);
                 ml.get_key(LLM_KV_POOLING_TYPE,               hparams.pooling_type, false);
