@@ -4063,6 +4063,7 @@ class NomicBertModel(BertModel):
             return False
         raise ValueError(f"unknown tokenizer: {toktyp}")
 
+
 @ModelBase.register("NeoBERT", "NeoBERTLMHead", "NeoBERTForSequenceClassification")
 class NeoBert(BertModel):
     model_arch = gguf.MODEL_ARCH.NEO_BERT
