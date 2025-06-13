@@ -740,9 +740,9 @@ void llama_model::load_hparams(llama_model_loader & ml) {
             } break;
         case LLM_ARCH_NEO_BERT:
             {
-                ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS,    hparams.f_norm_rms_eps);
-                ml.get_key(LLM_KV_ATTENTION_CAUSAL,               hparams.causal_attn);
-                ml.get_key(LLM_KV_POOLING_TYPE,                   hparams.pooling_type);
+                ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
+                ml.get_key(LLM_KV_ATTENTION_CAUSAL,            hparams.causal_attn);
+                ml.get_key(LLM_KV_POOLING_TYPE,                hparams.pooling_type);
 
                 if (hparams.n_layer == 28) {
                     type = LLM_TYPE_250M;
