@@ -265,104 +265,57 @@ void llm_graph_input_cross_embd::set_input(const llama_ubatch * ubatch) {
 }
 
 void llm_graph_input_attn_no_cache::set_input(const llama_ubatch * ubatch) {
-    if (kq_mask) {
-        if (cparams.causal_attn) {
-            const int64_t n_kv         = ubatch->n_tokens;
-            const int64_t n_tokens     = ubatch->n_tokens;
-            const int64_t n_seq_tokens = ubatch->n_seq_tokens;
-            const int64_t n_seqs       = ubatch->n_seqs;
+    // Helper function for SWA masking logic - mirrors llama_kv_cache_unified::is_masked_swa
+    auto is_masked_swa = [this](llama_pos p0, llama_pos p1) -> bool {
+        assert(p0 >= 0 && p1 >= 0);
 
-            GGML_ASSERT(ggml_backend_buffer_is_host(kq_mask->buffer));
-            float * data = (float *) kq_mask->data;
-
-            for (int h = 0; h < 1; ++h) {
-                for (int s1 = 0; s1 < n_seqs; ++s1) {
-                    const llama_seq_id seq_id = ubatch->seq_id[s1][0];
-
-                    for (int j = 0; j < n_seq_tokens; ++j) {
-                        const int32_t tj = s1*n_seq_tokens + j;
-
-                        for (int s0 = 0; s0 < n_seqs; ++s0) {
-                            for (int i = 0; i < n_seq_tokens; ++i) {
-                                const int32_t ti = s0*n_seq_tokens + i;
-                                float f = -INFINITY;
-
-                                // TODO: fix indexing [UBATCH_IDX]
-                                for (int s = 0; s < ubatch->n_seq_id[s0]; ++s) {
-                                    if (ubatch->seq_id[s0][s] == seq_id && ubatch->pos[ti] <= ubatch->pos[tj]) {
-                                        if (hparams.use_alibi) {
-                                            f = -std::abs(ubatch->pos[ti] - ubatch->pos[tj]);
-                                        } else {
-                                            f = 0.0f;
-                                        }
-                                        break;
-                                    }
-                                }
-
-                                data[h*(n_kv*n_tokens) + tj*n_kv + ti] = f;
-                            }
-                        }
+        switch (hparams.swa_type) {
+            case LLAMA_SWA_TYPE_NONE:
+                {
+                } break;
+            case LLAMA_SWA_TYPE_STANDARD:
+                {
+                    if (p1 - p0 >= (int32_t) hparams.n_swa) {
+                        return true;
                     }
-                }
-            }
-        } else {
-            const int64_t n_tokens     = ubatch->n_tokens;
-            const int64_t n_seq_tokens = ubatch->n_seq_tokens;
-            const int64_t n_seqs       = ubatch->n_seqs;
-            const int64_t n_stride     = ubatch->n_tokens;
+                } break;
+            case LLAMA_SWA_TYPE_CHUNKED:
+                {
+                    const llama_pos pos_chunk_start = (p1 / hparams.n_swa) * hparams.n_swa;
 
-            GGML_ASSERT(ggml_backend_buffer_is_host(kq_mask->buffer));
-
-            float * data = (float *) kq_mask->data;
-
-            for (int h = 0; h < 1; ++h) {
-                for (int s1 = 0; s1 < n_seqs; ++s1) {
-                    const llama_seq_id seq_id = ubatch->seq_id[s1][0];
-
-                    for (int j = 0; j < n_seq_tokens; ++j) {
-                        const int32_t tj = s1*n_seq_tokens + j;
-
-                        for (int s0 = 0; s0 < n_seqs; ++s0) {
-                            for (int i = 0; i < n_seq_tokens; ++i) {
-                                const int32_t ti = s0*n_seq_tokens + i;
-                                float f = -INFINITY;
-
-                                // TODO: fix indexing [UBATCH_IDX]
-                                for (int s = 0; s < ubatch->n_seq_id[s0]; ++s) {
-                                    if (ubatch->seq_id[s0][s] == seq_id) {
-                                        if (hparams.use_alibi) {
-                                            f = -std::abs(ubatch->pos[ti] - ubatch->pos[tj]);
-                                        } else {
-                                            f = 0.0f;
-                                        }
-                                        break;
-                                    }
-                                }
-
-                                data[h*(n_tokens*n_tokens) + tj*n_stride + ti] = f;
-                            }
-                        }
-
-                        for (int i = n_tokens; i < n_stride; ++i) {
-                            data[h*(n_tokens*n_tokens) + tj*n_stride + i] = -INFINITY;
-                        }
+                    if (p0 < pos_chunk_start) {
+                        return true;
                     }
-                }
-            }
+                } break;
+            case LLAMA_SWA_TYPE_SYMMETRIC:
+                {
+                    const int32_t half_n_swa = (int32_t) hparams.n_swa / 2;
+                    const int32_t pos_diff = p1 - p0;
+
+                    // Mask if outside the symmetric window
+                    if (pos_diff < -half_n_swa || pos_diff > half_n_swa) {
+                        return true;
+                    }
+                } break;
         }
-    }
 
-    // Handle symmetric SWA mask separately if it exists
-    if (kq_mask_swa) {
+        return false;
+    };
+
+    // Helper function for setting attention mask
+    auto set_mask = [this, ubatch, &is_masked_swa](ggml_tensor * mask, bool apply_swa) {
+        if (!mask) {
+            return;
+        }
+
         const int64_t n_tokens     = ubatch->n_tokens;
         const int64_t n_seq_tokens = ubatch->n_seq_tokens;
         const int64_t n_seqs       = ubatch->n_seqs;
-        const int64_t n_stride     = ubatch->n_tokens;
-        const int64_t half_n_swa   = hparams.n_swa / 2;
+        const int64_t n_kv         = ubatch->n_tokens;
+        const int64_t n_stride     = cparams.causal_attn ? n_kv : n_tokens;
 
-        GGML_ASSERT(ggml_backend_buffer_is_host(kq_mask_swa->buffer));
-
-        float * data = (float *) kq_mask_swa->data;
+        GGML_ASSERT(ggml_backend_buffer_is_host(mask->buffer));
+        float * data = (float *) mask->data;
 
         for (int h = 0; h < 1; ++h) {
             for (int s1 = 0; s1 < n_seqs; ++s1) {
@@ -370,50 +323,73 @@ void llm_graph_input_attn_no_cache::set_input(const llama_ubatch * ubatch) {
 
                 for (int j = 0; j < n_seq_tokens; ++j) {
                     const int32_t tj = s1*n_seq_tokens + j;
-                    const int64_t pos_j = ubatch->pos[tj];
+                    const llama_pos pos_j = ubatch->pos[tj];
 
                     for (int s0 = 0; s0 < n_seqs; ++s0) {
                         for (int i = 0; i < n_seq_tokens; ++i) {
                             const int32_t ti = s0*n_seq_tokens + i;
+                            const llama_pos pos_i = ubatch->pos[ti];
                             float f = -INFINITY;
 
-                            // TODO: fix indexing [UBATCH_IDX]
+                            // Check sequence match
+                            bool sequence_match = false;
                             for (int s = 0; s < ubatch->n_seq_id[s0]; ++s) {
                                 if (ubatch->seq_id[s0][s] == seq_id) {
-                                    const int64_t pos_i = ubatch->pos[ti];
-                                    const int64_t pos_diff = pos_j - pos_i;
-
-                                    // Check both causal attention and symmetric sliding window
-                                    bool masked = false;
-
-                                    // Apply causal attention if enabled (only allow attention to past tokens)
-                                    if (cparams.causal_attn && pos_i > pos_j) {
-                                        masked = true;
-                                    }
-
-                                    // Apply symmetric sliding window attention logic
-                                    if (!masked && pos_diff >= -half_n_swa && pos_diff <= half_n_swa) {
-                                        if (hparams.use_alibi) {
-                                            f = -std::abs(pos_i - pos_j);
-                                        } else {
-                                            f = 0.0f;
-                                        }
-                                    }
+                                    sequence_match = true;
                                     break;
                                 }
                             }
 
-                            data[h*(n_tokens*n_tokens) + tj*n_stride + ti] = f;
+                            if (sequence_match) {
+                                bool masked = false;
+
+                                // Apply causal attention if enabled
+                                if (cparams.causal_attn && pos_i > pos_j) {
+                                    masked = true;
+                                }
+
+                                // Apply SWA masking if needed
+                                if (!masked && apply_swa) {
+                                    masked = masked || is_masked_swa(pos_i, pos_j);
+                                }
+
+                                if (!masked) {
+                                    if (hparams.use_alibi) {
+                                        f = -std::abs(pos_i - pos_j);
+                                    } else {
+                                        f = 0.0f;
+                                    }
+                                }
+                            }
+
+                            const int idx = h*(n_tokens*n_tokens) + tj*n_stride + ti;
+                            data[idx] = f;
                         }
                     }
 
+                    // Pad the rest of the row with -INFINITY
                     for (int i = n_tokens; i < n_stride; ++i) {
-                        data[h*(n_tokens*n_tokens) + tj*n_stride + i] = -INFINITY;
+                        const int idx = h*(n_tokens*n_tokens) + tj*n_stride + i;
+                        data[idx] = -INFINITY;
                     }
                 }
             }
         }
-    }
+
+        // Pad any remaining entries with -INFINITY
+        for (int tj = n_tokens; tj < GGML_PAD(n_tokens, GGML_KQ_MASK_PAD); ++tj) {
+            for (int ti = 0; ti < n_stride; ++ti) {
+                const int idx = 0*(n_tokens*n_tokens) + tj*n_stride + ti;
+                data[idx] = -INFINITY;
+            }
+        }
+    };
+
+    // Set regular attention mask
+    set_mask(kq_mask, false);
+
+    // Set SWA attention mask if available
+    set_mask(kq_mask_swa, true);
 }
 
 void llm_graph_input_attn_kv_unified::set_input(const llama_ubatch * ubatch) {
