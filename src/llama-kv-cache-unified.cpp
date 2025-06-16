@@ -1332,7 +1332,7 @@ bool llama_kv_cache_unified::is_masked_swa(llama_pos p0, llama_pos p1) const {
             {
                 const int32_t half_n_swa = (int32_t) n_swa / 2;
                 const int32_t pos_diff = p1 - p0;
-                
+
                 // Mask if outside the symmetric window
                 if (pos_diff < -half_n_swa || pos_diff > half_n_swa) {
                     return true;
