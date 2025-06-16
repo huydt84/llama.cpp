@@ -528,8 +528,6 @@ class TextModel(ModelBase):
             logger.info(f"gguf: embedding length = {n_embd}")
 
         if (n_ff := self.find_hparam(["intermediate_size", "n_inner", "hidden_dim"], optional=True)) is not None:
-            if self.model_arch == gguf.MODEL_ARCH.NEO_BERT:
-                n_ff = int(2 * n_ff / 3) # NeoBERT uses 2/3 of the intermediate size as feed forward length
             self.gguf_writer.add_feed_forward_length(n_ff)
             logger.info(f"gguf: feed forward length = {n_ff}")
 
@@ -4085,6 +4083,8 @@ class NeoBert(BertModel):
     def set_gguf_parameters(self):
         super().set_gguf_parameters()
 
+        # NeoBERT uses 2/3 of the intermediate size as feed forward length
+        self.gguf_writer.add_feed_forward_length(int(2 * self.hparams["intermediate_size"] / 3))
         self.gguf_writer.add_rope_freq_base(10000.0)  # default value for NeoBERT
         self.gguf_writer.add_rope_scaling_type(gguf.RopeScalingType.NONE)
 
