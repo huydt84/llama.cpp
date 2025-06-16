@@ -383,8 +383,16 @@ void llm_graph_input_attn_no_cache::set_input(const llama_ubatch * ubatch) {
                                     const int64_t pos_i = ubatch->pos[ti];
                                     const int64_t pos_diff = pos_j - pos_i;
 
+                                    // Check both causal attention and symmetric sliding window
+                                    bool masked = false;
+                                    
+                                    // Apply causal attention if enabled (only allow attention to past tokens)
+                                    if (cparams.causal_attn && pos_i > pos_j) {
+                                        masked = true;
+                                    }
+                                    
                                     // Apply symmetric sliding window attention logic
-                                    if (pos_diff >= -half_n_swa && pos_diff <= half_n_swa) {
+                                    if (!masked && pos_diff >= -half_n_swa && pos_diff <= half_n_swa) {
                                         if (hparams.use_alibi) {
                                             f = -std::abs(pos_i - pos_j);
                                         } else {
