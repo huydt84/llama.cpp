@@ -129,7 +129,6 @@ models = [
     {"name": "pixtral",          "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/mistral-community/pixtral-12b", },
     {"name": "seed-coder",       "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/ByteDance-Seed/Seed-Coder-8B-Base", },
     {"name": "modern-bert",      "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/answerdotai/ModernBERT-base", },
-    {"name": "arcee",            "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/arcee-ai/AFM-4.5B", }, # TODO confirm final URL
 ]
 
 # some models are known to be broken upstream, so we will skip them as exceptions
