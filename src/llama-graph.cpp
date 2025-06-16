@@ -266,7 +266,6 @@ void llm_graph_input_cross_embd::set_input(const llama_ubatch * ubatch) {
 
 void llm_graph_input_attn_no_cache::set_input(const llama_ubatch * ubatch) {
     if (kq_mask) {
-        // Check if we're using sliding window attention
         if (cparams.causal_attn) {
             const int64_t n_kv         = ubatch->n_tokens;
             const int64_t n_tokens     = ubatch->n_tokens;
@@ -311,7 +310,6 @@ void llm_graph_input_attn_no_cache::set_input(const llama_ubatch * ubatch) {
             const int64_t n_seq_tokens = ubatch->n_seq_tokens;
             const int64_t n_seqs       = ubatch->n_seqs;
             const int64_t n_stride     = ubatch->n_tokens;
-            const int64_t half_n_swa   = hparams.n_swa / 2;
 
             GGML_ASSERT(ggml_backend_buffer_is_host(kq_mask->buffer));
 
@@ -323,7 +321,6 @@ void llm_graph_input_attn_no_cache::set_input(const llama_ubatch * ubatch) {
 
                     for (int j = 0; j < n_seq_tokens; ++j) {
                         const int32_t tj = s1*n_seq_tokens + j;
-                        const int64_t pos_j = ubatch->pos[tj];
 
                         for (int s0 = 0; s0 < n_seqs; ++s0) {
                             for (int i = 0; i < n_seq_tokens; ++i) {
@@ -333,11 +330,7 @@ void llm_graph_input_attn_no_cache::set_input(const llama_ubatch * ubatch) {
                                 // TODO: fix indexing [UBATCH_IDX]
                                 for (int s = 0; s < ubatch->n_seq_id[s0]; ++s) {
                                     if (ubatch->seq_id[s0][s] == seq_id) {
-                                        const int64_t pos_i = ubatch->pos[ti];
-                                        const int64_t pos_diff = pos_j - pos_i;
-
-                                        if (hparams.use_alibi &&
-                                                (hparams.n_swa == 0 || (pos_diff >= -half_n_swa && pos_diff <= half_n_swa))) {
+                                        if (hparams.use_alibi) {
                                             f = -std::abs(ubatch->pos[ti] - ubatch->pos[tj]);
                                         } else {
                                             f = 0.0f;
@@ -353,6 +346,61 @@ void llm_graph_input_attn_no_cache::set_input(const llama_ubatch * ubatch) {
                         for (int i = n_tokens; i < n_stride; ++i) {
                             data[h*(n_tokens*n_tokens) + tj*n_stride + i] = -INFINITY;
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    // Handle symmetric SWA mask separately if it exists
+    if (kq_mask_swa) {
+        const int64_t n_tokens     = ubatch->n_tokens;
+        const int64_t n_seq_tokens = ubatch->n_seq_tokens;
+        const int64_t n_seqs       = ubatch->n_seqs;
+        const int64_t n_stride     = ubatch->n_tokens;
+        const int64_t half_n_swa   = hparams.n_swa / 2;
+
+        GGML_ASSERT(ggml_backend_buffer_is_host(kq_mask_swa->buffer));
+
+        float * data = (float *) kq_mask_swa->data;
+
+        for (int h = 0; h < 1; ++h) {
+            for (int s1 = 0; s1 < n_seqs; ++s1) {
+                const llama_seq_id seq_id = ubatch->seq_id[s1][0];
+
+                for (int j = 0; j < n_seq_tokens; ++j) {
+                    const int32_t tj = s1*n_seq_tokens + j;
+                    const int64_t pos_j = ubatch->pos[tj];
+
+                    for (int s0 = 0; s0 < n_seqs; ++s0) {
+                        for (int i = 0; i < n_seq_tokens; ++i) {
+                            const int32_t ti = s0*n_seq_tokens + i;
+                            float f = -INFINITY;
+
+                            // TODO: fix indexing [UBATCH_IDX]
+                            for (int s = 0; s < ubatch->n_seq_id[s0]; ++s) {
+                                if (ubatch->seq_id[s0][s] == seq_id) {
+                                    const int64_t pos_i = ubatch->pos[ti];
+                                    const int64_t pos_diff = pos_j - pos_i;
+
+                                    // Apply symmetric sliding window attention logic
+                                    if (pos_diff >= -half_n_swa && pos_diff <= half_n_swa) {
+                                        if (hparams.use_alibi) {
+                                            f = -std::abs(pos_i - pos_j);
+                                        } else {
+                                            f = 0.0f;
+                                        }
+                                    }
+                                    break;
+                                }
+                            }
+
+                            data[h*(n_tokens*n_tokens) + tj*n_stride + ti] = f;
+                        }
+                    }
+
+                    for (int i = n_tokens; i < n_stride; ++i) {
+                        data[h*(n_tokens*n_tokens) + tj*n_stride + i] = -INFINITY;
                     }
                 }
             }
@@ -1181,6 +1229,15 @@ llm_graph_input_attn_no_cache * llm_graph_context::build_attn_inp_no_cache() con
 
     inp->kq_mask_cnv = cparams.flash_attn ? ggml_cast(ctx0, inp->kq_mask, GGML_TYPE_F16) : inp->kq_mask;
 
+    // Create SWA mask for symmetric sliding window attention if SWA is enabled
+    if (hparams.swa_type != LLAMA_SWA_TYPE_NONE && hparams.n_swa > 0) {
+        inp->kq_mask_swa = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_tokens, GGML_PAD(n_tokens, GGML_KQ_MASK_PAD));
+        //cb(inp_kq_mask_swa, "KQ_mask_swa", -1);
+        ggml_set_input(inp->kq_mask_swa);
+
+        inp->kq_mask_swa_cnv = cparams.flash_attn ? ggml_cast(ctx0, inp->kq_mask_swa, GGML_TYPE_F16) : inp->kq_mask_swa;
+    }
+
     return (llm_graph_input_attn_no_cache *) res->add_input(std::move(inp));
 }
 
@@ -1204,7 +1261,8 @@ ggml_tensor * llm_graph_context::build_attn(
     ggml_build_forward_expand(gf, k_cur);
     ggml_build_forward_expand(gf, v_cur);
 
-    const auto & kq_mask = inp->get_kq_mask();
+    // Select appropriate mask based on SWA type
+    const auto & kq_mask = hparams.is_swa(il) && inp->kq_mask_swa ? inp->get_kq_mask_swa() : inp->get_kq_mask();
 
     ggml_tensor * q = q_cur;
     ggml_tensor * k = k_cur;
