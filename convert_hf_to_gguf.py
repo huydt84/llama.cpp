@@ -4167,7 +4167,7 @@ class GemmaModel(TextModel):
         return [(self.map_tensor_name(name), data_torch)]
 
 
-@ModelBase.register("Gemma2ForCausalLM")
+@ModelBase.register("Gemma2ForCausalLM", "Gemma2ForSequenceClassification")
 class Gemma2Model(TextModel):
     model_arch = gguf.MODEL_ARCH.GEMMA2
 
@@ -4210,6 +4210,9 @@ class Gemma2Model(TextModel):
         # ref: https://github.com/huggingface/transformers/blob/fc37f38915372c15992b540dfcbbe00a916d4fc6/src/transformers/models/gemma/modeling_gemma.py#L89
         if name.endswith("norm.weight"):
             data_torch = data_torch + 1
+        
+        if name.startswith("score"):
+            name = "classifier.out_proj" + name[5:]  # convert score.* to classifier.out_proj.*
 
         return [(self.map_tensor_name(name), data_torch)]
 
