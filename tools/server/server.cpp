@@ -3197,7 +3197,7 @@ struct server_context {
                                 slot.n_prompt_tokens = prompt_tokens.size();
 
                                 SLT_WRN(slot, "input truncated, n_ctx = %d, n_keep = %d, n_left = %d, n_prompt_tokens = %d\n", slot.n_ctx, slot.params.n_keep, n_left, slot.n_prompt_tokens);
-                                
+
                                 // Warn specifically for embedding tasks about potential quality impact
                                 if (slot.need_embd()) {
                                     SLT_WRN(slot, "%s", "WARNING: Embedding input was truncated. The resulting embedding may not fully represent the original input. Consider increasing context size or reducing input length for better embedding quality.");
