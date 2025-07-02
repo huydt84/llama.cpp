@@ -1363,11 +1363,10 @@ struct server_slot {
 
     // if the context does not have a memory module then all embeddings have to be computed within a single ubatch
     // also we cannot split if the pooling would require any past tokens
+    // @param truncate_embed: if true, allows splitting for embedding tasks to handle large inputs
+    // with automatic truncation. If false, uses original conservative logic.
     // NOTE: When embedding inputs are truncated, the resulting embedding may not fully represent
     // the original input. The 'truncated' field in the response indicates when this occurs.
-    // 
-    // @param truncate_embed: if true, allows splitting for embedding tasks to handle large inputs
-    //                       with automatic truncation. If false, uses original conservative logic.
     bool can_split(bool truncate_embed = false) const {
         return
             !need_embd() ||
